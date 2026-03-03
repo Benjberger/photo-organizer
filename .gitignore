@@ -1,0 +1,23 @@
+# Virtual environment — anyone can recreate this with `pip install -r requirements.txt`
+venv/
+
+# Python bytecode — auto-generated when Python runs your code
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# IDE settings — each developer has their own preferences
+.vscode/
+.idea/
+
+# Environment variables — may contain secrets
+.env
+
+# OS-generated files
+Thumbs.db
+.DS_Store
