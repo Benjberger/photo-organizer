@@ -35,16 +35,20 @@ PLACEHOLDERS = {
     "{model}": "Camera model (e.g., EOS R5)",
     "{seq}": "Sequence number (001, 002, ...)",
     "{original}": "Original filename (without extension)",
+    "{location}": "Location name from GPS or user-provided group name",
 }
 
 
-def plan_renames(directory, pattern, start_seq=1):
+def plan_renames(directory, pattern, start_seq=1, location_map=None):
     """Plan how files would be renamed without changing anything.
 
     Args:
         directory: Directory containing photos.
         pattern: Naming pattern with placeholders like {date}_{camera}_{seq}
         start_seq: Starting number for {seq} placeholder.
+        location_map: Optional dict mapping Path → location name string.
+                      Built by grouping.build_location_map(). If the pattern
+                      uses {location} and no map is provided, "unknown" is used.
 
     Returns:
         A list of (old_path, new_path) tuples.
@@ -54,7 +58,10 @@ def plan_renames(directory, pattern, start_seq=1):
     seq = start_seq
 
     for filepath in scan_photos(directory):
-        new_name = _apply_pattern(filepath, pattern, seq)
+        location = None
+        if location_map:
+            location = location_map.get(filepath)
+        new_name = _apply_pattern(filepath, pattern, seq, location=location)
         new_path = filepath.parent / new_name
 
         # Avoid renaming to the same name
@@ -172,13 +179,14 @@ def undo_renames(undo_log_path):
     return results
 
 
-def _apply_pattern(filepath, pattern, seq):
+def _apply_pattern(filepath, pattern, seq, location=None):
     """Fill in a naming pattern with actual metadata values.
 
     Args:
         filepath: Path to the photo file.
         pattern: Pattern string with {placeholders}.
         seq: Current sequence number.
+        location: Optional location/group name for {location} placeholder.
 
     Returns:
         The new filename (with original extension preserved).
@@ -191,6 +199,7 @@ def _apply_pattern(filepath, pattern, seq):
     values = {
         "original": filepath.stem,
         "seq": f"{seq:03d}",  # Zero-padded to 3 digits: 001, 002, etc.
+        "location": _clean_name(location) if location else "unknown",
     }
 
     # Date-related values

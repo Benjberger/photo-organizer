@@ -59,6 +59,29 @@ def test_apply_pattern_no_date(tmp_path):
     assert result == "undated_005.jpg"
 
 
+def test_apply_pattern_with_location(tmp_path):
+    """Pattern with {location} should use provided location name."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+    fake_date = datetime(2024, 6, 15, 14, 30, 0)
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=fake_date), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(photo, "{location}_{date}_{seq}", 1, location="Paris")
+
+    assert result == "Paris_2024-06-15_001.jpg"
+
+
+def test_apply_pattern_location_fallback(tmp_path):
+    """Pattern with {location} but no location should use 'unknown'."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=None), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(photo, "{location}_{seq}", 1, location=None)
+
+    assert result == "unknown_001.jpg"
+
+
 def test_apply_pattern_preserves_extension(tmp_path):
     """Original file extension should be kept."""
     photo = _create_photo(tmp_path, "RAW_FILE.CR2")
