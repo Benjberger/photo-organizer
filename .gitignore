@@ -21,3 +21,11 @@ build/
 # OS-generated files
 Thumbs.db
 .DS_Store
+~$*
+
+# Generated files
+contact_sheet.html
+
+# Test photos (user's personal files)
+test-photos/
+test-output/

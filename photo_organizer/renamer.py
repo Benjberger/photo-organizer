@@ -49,18 +49,30 @@ def plan_renames(directory, pattern, start_seq=1, location_map=None):
         location_map: Optional dict mapping Path → location name string.
                       Built by grouping.build_location_map(). If the pattern
                       uses {location} and no map is provided, "unknown" is used.
+                      When provided, sequence numbers restart at 1 for each
+                      group so you get group1_001, group1_002, group2_001, etc.
 
     Returns:
         A list of (old_path, new_path) tuples.
     """
     directory = Path(directory)
     renames = []
+
+    if location_map:
+        # Per-group sequence counters: each location group starts at 1
+        group_seq = {}
+
     seq = start_seq
 
     for filepath in scan_photos(directory):
         location = None
         if location_map:
             location = location_map.get(filepath)
+            # Track a separate counter per group name
+            group_name = location or "unknown"
+            group_seq[group_name] = group_seq.get(group_name, 0) + 1
+            seq = group_seq[group_name]
+
         new_name = _apply_pattern(filepath, pattern, seq, location=location)
         new_path = filepath.parent / new_name
 
@@ -68,7 +80,8 @@ def plan_renames(directory, pattern, start_seq=1, location_map=None):
         if new_path != filepath:
             renames.append((filepath, new_path))
 
-        seq += 1
+        if not location_map:
+            seq += 1
 
     return renames
 

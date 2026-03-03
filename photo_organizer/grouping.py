@@ -287,17 +287,36 @@ def build_location_map(clusters):
     This is the output that the renamer uses. Given a photo path,
     it returns the location name for that photo's cluster.
 
+    When multiple groups share the same name (e.g., all "unnamed"),
+    we append numbers to make them distinct so that sequence counters
+    restart per group: "unnamed_1", "unnamed_2", etc.
+
     Args:
         clusters: List of cluster dicts (with locations resolved).
 
     Returns:
         A dict mapping Path → location name string.
     """
+    # First pass: count how many clusters share each name
+    name_counts = {}
+    for cluster in clusters:
+        name = cluster["location"] or "unnamed"
+        name_counts[name] = name_counts.get(name, 0) + 1
+
+    # Second pass: disambiguate duplicates with numbered suffixes
+    name_next_num = {}
     location_map = {}
     for cluster in clusters:
         name = cluster["location"] or "unnamed"
+        if name_counts[name] > 1:
+            # Multiple groups with this name — add a number
+            num = name_next_num.get(name, 1)
+            name_next_num[name] = num + 1
+            unique_name = f"{name}_{num}"
+        else:
+            unique_name = name
         for photo in cluster["photos"]:
-            location_map[photo] = name
+            location_map[photo] = unique_name
     return location_map
 
 

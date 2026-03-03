@@ -103,6 +103,28 @@ def build_parser():
         help="Hours between photo groups for {location} clustering (default: 3)",
     )
 
+    # --- review command ---
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Generate an HTML contact sheet to visually review photo groups",
+    )
+    review_parser.add_argument(
+        "directory",
+        help="Directory containing photos to review",
+    )
+    review_parser.add_argument(
+        "--gap-hours", type=float, default=3.0,
+        help="Hours between photo groups (default: 3)",
+    )
+    review_parser.add_argument(
+        "--output", default=None,
+        help="Output HTML file path (default: contact_sheet.html)",
+    )
+    review_parser.add_argument(
+        "--no-open", action="store_true",
+        help="Don't automatically open the contact sheet in a browser",
+    )
+
     return parser
 
 
@@ -121,6 +143,8 @@ def main():
         _cmd_duplicates(args)
     elif args.command == "rename":
         _cmd_rename(args)
+    elif args.command == "review":
+        _cmd_review(args)
 
 
 def _cmd_organize(args):
@@ -212,10 +236,17 @@ def _cmd_rename(args):
             format_clusters_report,
         )
 
+        from photo_organizer.contact_sheet import generate_contact_sheet
+
         print(f"Grouping photos by time (gap: {args.gap_hours}h)...")
         clusters = cluster_by_time(args.directory, gap_hours=args.gap_hours)
         clusters = resolve_cluster_locations(clusters)
         print(format_clusters_report(clusters))
+
+        # Generate a contact sheet so you can see the photos before naming
+        print("\nGenerating contact sheet for review...")
+        sheet_path = generate_contact_sheet(clusters, open_browser=True)
+        print(f"Contact sheet: {sheet_path.resolve()}")
 
         # Prompt user to name any clusters without a location
         if not args.dry_run:
@@ -243,6 +274,29 @@ def _cmd_rename(args):
         print(f"Undo log saved to: {args.undo_log}")
     for error in results["errors"]:
         print(f"  Error: {error}")
+
+
+def _cmd_review(args):
+    """Handle the 'review' subcommand."""
+    from photo_organizer.grouping import (
+        cluster_by_time,
+        resolve_cluster_locations,
+        format_clusters_report,
+    )
+    from photo_organizer.contact_sheet import generate_contact_sheet
+
+    print(f"Grouping photos by time (gap: {args.gap_hours}h)...")
+    clusters = cluster_by_time(args.directory, gap_hours=args.gap_hours)
+    clusters = resolve_cluster_locations(clusters)
+    print(format_clusters_report(clusters))
+
+    print("\nGenerating contact sheet...")
+    sheet_path = generate_contact_sheet(
+        clusters, output_path=args.output, open_browser=not args.no_open
+    )
+    print(f"Contact sheet saved to: {sheet_path.resolve()}")
+    if args.no_open:
+        print("Open it in your browser to review the groups.")
 
 
 if __name__ == "__main__":
