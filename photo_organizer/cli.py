@@ -71,6 +71,38 @@ def build_parser():
         help="Where to move duplicates (required with --action=move)",
     )
 
+    # --- rename command ---
+    rename_parser = subparsers.add_parser(
+        "rename",
+        help="Batch rename photos using a pattern",
+    )
+    rename_parser.add_argument(
+        "directory",
+        help="Directory containing photos to rename",
+    )
+    rename_parser.add_argument(
+        "--pattern", default="{date}_{seq}",
+        help="Naming pattern (default: {date}_{seq}). "
+             "Placeholders: {date}, {datetime}, {year}, {month}, {day}, "
+             "{camera}, {model}, {seq}, {original}, {location}",
+    )
+    rename_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview renames without applying them",
+    )
+    rename_parser.add_argument(
+        "--undo-log",
+        help="Path to save undo log (JSON file for reversing renames)",
+    )
+    rename_parser.add_argument(
+        "--undo", metavar="LOG_FILE",
+        help="Reverse a previous rename using an undo log file",
+    )
+    rename_parser.add_argument(
+        "--gap-hours", type=float, default=3.0,
+        help="Hours between photo groups for {location} clustering (default: 3)",
+    )
+
     return parser
 
 
@@ -87,6 +119,8 @@ def main():
         _cmd_metadata(args)
     elif args.command == "duplicates":
         _cmd_duplicates(args)
+    elif args.command == "rename":
+        _cmd_rename(args)
 
 
 def _cmd_organize(args):
@@ -147,6 +181,68 @@ def _cmd_duplicates(args):
         print(f"Processed {results['processed']} duplicate(s).")
         for error in results["errors"]:
             print(f"  Error: {error}")
+
+
+def _cmd_rename(args):
+    """Handle the 'rename' subcommand."""
+    from photo_organizer.renamer import (
+        plan_renames,
+        preview_renames,
+        execute_renames,
+        undo_renames,
+    )
+
+    # Undo mode: reverse a previous rename
+    if args.undo:
+        print(f"Undoing renames from {args.undo}...")
+        results = undo_renames(args.undo)
+        print(f"Restored {results['success']} file(s), {results['failed']} failed.")
+        for error in results["errors"]:
+            print(f"  Error: {error}")
+        return
+
+    # If pattern uses {location}, run the grouping pipeline
+    location_map = None
+    if "{location}" in args.pattern:
+        from photo_organizer.grouping import (
+            cluster_by_time,
+            resolve_cluster_locations,
+            prompt_for_cluster_names,
+            build_location_map,
+            format_clusters_report,
+        )
+
+        print(f"Grouping photos by time (gap: {args.gap_hours}h)...")
+        clusters = cluster_by_time(args.directory, gap_hours=args.gap_hours)
+        clusters = resolve_cluster_locations(clusters)
+        print(format_clusters_report(clusters))
+
+        # Prompt user to name any clusters without a location
+        if not args.dry_run:
+            clusters = prompt_for_cluster_names(clusters)
+
+        location_map = build_location_map(clusters)
+
+    # Normal rename mode
+    print(f"\nPlanning renames with pattern: {args.pattern}")
+    renames = plan_renames(args.directory, args.pattern, location_map=location_map)
+
+    if not renames:
+        print("No files to rename.")
+        return
+
+    print(preview_renames(renames))
+
+    if args.dry_run:
+        print("(Dry run — no files were changed)")
+        return
+
+    results = execute_renames(renames, undo_log_path=args.undo_log)
+    print(f"Renamed {results['success']} file(s), {results['failed']} failed.")
+    if args.undo_log:
+        print(f"Undo log saved to: {args.undo_log}")
+    for error in results["errors"]:
+        print(f"  Error: {error}")
 
 
 if __name__ == "__main__":
