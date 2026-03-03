@@ -53,6 +53,24 @@ def build_parser():
         help="Path to a photo file",
     )
 
+    # --- duplicates command ---
+    dupes_parser = subparsers.add_parser(
+        "duplicates",
+        help="Find and handle duplicate photos",
+    )
+    dupes_parser.add_argument(
+        "directory",
+        help="Directory to scan for duplicates",
+    )
+    dupes_parser.add_argument(
+        "--action", choices=["report", "move", "delete"], default="report",
+        help="What to do with duplicates (default: report)",
+    )
+    dupes_parser.add_argument(
+        "--duplicates-dir",
+        help="Where to move duplicates (required with --action=move)",
+    )
+
     return parser
 
 
@@ -67,6 +85,8 @@ def main():
         _cmd_organize(args)
     elif args.command == "metadata":
         _cmd_metadata(args)
+    elif args.command == "duplicates":
+        _cmd_duplicates(args)
 
 
 def _cmd_organize(args):
@@ -105,6 +125,28 @@ def _cmd_metadata(args):
 
     metadata = read_metadata(args.file)
     print(format_metadata(metadata))
+
+
+def _cmd_duplicates(args):
+    """Handle the 'duplicates' subcommand."""
+    from photo_organizer.duplicates import (
+        find_duplicates,
+        format_duplicates_report,
+        handle_duplicates,
+    )
+
+    print(f"Scanning {args.directory} for duplicates...")
+    groups = find_duplicates(args.directory)
+    print(format_duplicates_report(groups))
+
+    if args.action != "report" and groups:
+        print(f"\n{args.action.title()}ing duplicates...")
+        results = handle_duplicates(
+            groups, action=args.action, duplicates_dir=args.duplicates_dir
+        )
+        print(f"Processed {results['processed']} duplicate(s).")
+        for error in results["errors"]:
+            print(f"  Error: {error}")
 
 
 if __name__ == "__main__":
