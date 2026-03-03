@@ -71,6 +71,34 @@ def build_parser():
         help="Where to move duplicates (required with --action=move)",
     )
 
+    # --- rename command ---
+    rename_parser = subparsers.add_parser(
+        "rename",
+        help="Batch rename photos using a pattern",
+    )
+    rename_parser.add_argument(
+        "directory",
+        help="Directory containing photos to rename",
+    )
+    rename_parser.add_argument(
+        "--pattern", default="{date}_{seq}",
+        help="Naming pattern (default: {date}_{seq}). "
+             "Placeholders: {date}, {datetime}, {year}, {month}, {day}, "
+             "{camera}, {model}, {seq}, {original}",
+    )
+    rename_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview renames without applying them",
+    )
+    rename_parser.add_argument(
+        "--undo-log",
+        help="Path to save undo log (JSON file for reversing renames)",
+    )
+    rename_parser.add_argument(
+        "--undo", metavar="LOG_FILE",
+        help="Reverse a previous rename using an undo log file",
+    )
+
     return parser
 
 
@@ -87,6 +115,8 @@ def main():
         _cmd_metadata(args)
     elif args.command == "duplicates":
         _cmd_duplicates(args)
+    elif args.command == "rename":
+        _cmd_rename(args)
 
 
 def _cmd_organize(args):
@@ -147,6 +177,46 @@ def _cmd_duplicates(args):
         print(f"Processed {results['processed']} duplicate(s).")
         for error in results["errors"]:
             print(f"  Error: {error}")
+
+
+def _cmd_rename(args):
+    """Handle the 'rename' subcommand."""
+    from photo_organizer.renamer import (
+        plan_renames,
+        preview_renames,
+        execute_renames,
+        undo_renames,
+    )
+
+    # Undo mode: reverse a previous rename
+    if args.undo:
+        print(f"Undoing renames from {args.undo}...")
+        results = undo_renames(args.undo)
+        print(f"Restored {results['success']} file(s), {results['failed']} failed.")
+        for error in results["errors"]:
+            print(f"  Error: {error}")
+        return
+
+    # Normal rename mode
+    print(f"Planning renames with pattern: {args.pattern}")
+    renames = plan_renames(args.directory, args.pattern)
+
+    if not renames:
+        print("No files to rename.")
+        return
+
+    print(preview_renames(renames))
+
+    if args.dry_run:
+        print("(Dry run — no files were changed)")
+        return
+
+    results = execute_renames(renames, undo_log_path=args.undo_log)
+    print(f"Renamed {results['success']} file(s), {results['failed']} failed.")
+    if args.undo_log:
+        print(f"Undo log saved to: {args.undo_log}")
+    for error in results["errors"]:
+        print(f"  Error: {error}")
 
 
 if __name__ == "__main__":
