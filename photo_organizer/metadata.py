@@ -9,6 +9,8 @@ This module supports:
 - RAW files (CR2, NEF, ARW, etc.): basic metadata via exifread and rawpy
 """
 
+import io
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -99,8 +101,15 @@ def read_exif_raw(filepath):
     metadata = {}
 
     try:
+        # Suppress exifread's "File format not recognized" messages —
+        # it prints directly to stderr instead of using logging
         with open(filepath, "rb") as f:
-            tags = exifread.process_file(f, details=False)
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                tags = exifread.process_file(f, details=False)
+            finally:
+                sys.stderr = old_stderr
 
         for tag_name, value in tags.items():
             # exifread prefixes tags like "EXIF DateTimeOriginal"
