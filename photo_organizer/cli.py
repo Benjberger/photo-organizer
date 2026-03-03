@@ -125,6 +125,36 @@ def build_parser():
         help="Don't automatically open the contact sheet in a browser",
     )
 
+    # --- select command ---
+    select_parser = subparsers.add_parser(
+        "select",
+        help="Score photos and identify best candidates for printing",
+    )
+    select_parser.add_argument(
+        "directory",
+        help="Directory containing photos to score",
+    )
+    select_parser.add_argument(
+        "--min-score", type=float, default=60,
+        help="Minimum score to be a print candidate (0-100, default: 60)",
+    )
+    select_parser.add_argument(
+        "--top", type=int, default=None,
+        help="Show only the top N photos",
+    )
+    select_parser.add_argument(
+        "--export", metavar="FILE",
+        help="Export selected photo paths to a text file",
+    )
+    select_parser.add_argument(
+        "--tag", metavar="TAG",
+        help="Tag all candidates with this label (e.g., 'print')",
+    )
+    select_parser.add_argument(
+        "--tags-file", default="photo_tags.json",
+        help="JSON file for storing tags (default: photo_tags.json)",
+    )
+
     return parser
 
 
@@ -145,6 +175,8 @@ def main():
         _cmd_rename(args)
     elif args.command == "review":
         _cmd_review(args)
+    elif args.command == "select":
+        _cmd_select(args)
 
 
 def _cmd_organize(args):
@@ -274,6 +306,46 @@ def _cmd_rename(args):
         print(f"Undo log saved to: {args.undo_log}")
     for error in results["errors"]:
         print(f"  Error: {error}")
+
+
+def _cmd_select(args):
+    """Handle the 'select' subcommand."""
+    from photo_organizer.selector import (
+        score_directory,
+        get_print_candidates,
+        format_scores_report,
+        load_tags,
+        save_tags,
+        tag_photo,
+        export_selection,
+    )
+
+    print(f"Scoring photos in {args.directory}...")
+    scores = score_directory(args.directory)
+
+    if not scores:
+        print("No photos found.")
+        return
+
+    candidates = get_print_candidates(scores, min_score=args.min_score, top_n=args.top)
+
+    print(f"\nAll {len(scores)} photos scored. "
+          f"{len(candidates)} meet the threshold (score >= {args.min_score}).\n")
+    print(format_scores_report(candidates))
+
+    # Tag candidates if requested
+    if args.tag and candidates:
+        tags = load_tags(args.tags_file)
+        for s in candidates:
+            tag_photo(tags, s["filepath"], args.tag)
+        save_tags(tags, args.tags_file)
+        print(f"\nTagged {len(candidates)} photo(s) as '{args.tag}' in {args.tags_file}")
+
+    # Export if requested
+    if args.export and candidates:
+        paths = [str(s["filepath"]) for s in candidates]
+        export_selection(paths, args.export)
+        print(f"Exported {len(candidates)} path(s) to {args.export}")
 
 
 def _cmd_review(args):
