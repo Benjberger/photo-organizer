@@ -125,6 +125,44 @@ def build_parser():
         help="Don't automatically open the contact sheet in a browser",
     )
 
+    # --- group command ---
+    group_parser = subparsers.add_parser(
+        "group",
+        help="Group, deduplicate, and organize photos into named folders",
+    )
+    group_parser.add_argument(
+        "source",
+        help="Directory containing photos to organize",
+    )
+    group_parser.add_argument(
+        "destination",
+        help="Root directory to create group folders in",
+    )
+    group_parser.add_argument(
+        "--pattern", default="{location}_{date}_{seq}",
+        help="Naming pattern for files (default: {location}_{date}_{seq})",
+    )
+    group_parser.add_argument(
+        "--gap-hours", type=float, default=3.0,
+        help="Hours between photo groups for time clustering (default: 3)",
+    )
+    group_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview the plan without moving any files",
+    )
+    group_parser.add_argument(
+        "--undo-log",
+        help="Path for the undo log (default: destination/.group_undo_log.json)",
+    )
+    group_parser.add_argument(
+        "--undo", metavar="LOG_FILE",
+        help="Reverse a previous group operation using an undo log",
+    )
+    group_parser.add_argument(
+        "--no-open", action="store_true",
+        help="Don't automatically open the contact sheet in a browser",
+    )
+
     # --- select command ---
     select_parser = subparsers.add_parser(
         "select",
@@ -155,6 +193,20 @@ def build_parser():
         help="JSON file for storing tags (default: photo_tags.json)",
     )
 
+    # --- web command ---
+    web_parser = subparsers.add_parser(
+        "web",
+        help="Launch the web interface",
+    )
+    web_parser.add_argument(
+        "--port", type=int, default=5000,
+        help="Port to run on (default: 5000)",
+    )
+    web_parser.add_argument(
+        "--no-open", action="store_true",
+        help="Don't automatically open browser",
+    )
+
     return parser
 
 
@@ -177,6 +229,10 @@ def main():
         _cmd_review(args)
     elif args.command == "select":
         _cmd_select(args)
+    elif args.command == "group":
+        _cmd_group(args)
+    elif args.command == "web":
+        _cmd_web(args)
 
 
 def _cmd_organize(args):
@@ -369,6 +425,137 @@ def _cmd_review(args):
     print(f"Contact sheet saved to: {sheet_path.resolve()}")
     if args.no_open:
         print("Open it in your browser to review the groups.")
+
+
+def _cmd_group(args):
+    """Handle the 'group' subcommand."""
+    from pathlib import Path
+
+    from photo_organizer.group_organizer import (
+        find_group_duplicates,
+        format_group_duplicates,
+        prompt_duplicate_removal,
+        prompt_for_cluster_dates,
+        plan_group_moves,
+        preview_group_moves,
+        execute_group_moves,
+        undo_group_moves,
+    )
+
+    # Undo mode
+    if args.undo:
+        print(f"Undoing group moves from {args.undo}...")
+        results = undo_group_moves(args.undo)
+        print(f"Restored {results['success']} file(s), {results['failed']} failed.")
+        for error in results["errors"]:
+            print(f"  Error: {error}")
+        return
+
+    from photo_organizer.grouping import (
+        cluster_by_time,
+        resolve_cluster_locations,
+        prompt_for_cluster_names,
+        format_clusters_report,
+    )
+    from photo_organizer.contact_sheet import generate_contact_sheet
+
+    # Step 1: Cluster by time
+    print(f"Scanning {args.source} for photos...")
+    print(f"Grouping by time (gap: {args.gap_hours}h)...")
+    clusters = cluster_by_time(args.source, gap_hours=args.gap_hours)
+    clusters = resolve_cluster_locations(clusters)
+    print(format_clusters_report(clusters))
+
+    if not clusters:
+        print("No photos found.")
+        return
+
+    # Step 2: Find duplicates within groups
+    print("\nChecking for duplicates within groups...")
+    group_dupes = find_group_duplicates(clusters)
+    if group_dupes:
+        print(format_group_duplicates(clusters, group_dupes))
+    else:
+        print("  No duplicates found.")
+
+    # Step 3: Generate contact sheet for visual review
+    print("\nGenerating contact sheet for review...")
+    sheet_path = generate_contact_sheet(
+        clusters, open_browser=not args.no_open
+    )
+    print(f"Contact sheet: {sheet_path.resolve()}")
+
+    if args.dry_run:
+        # In dry-run mode, show what would happen with placeholder names
+        print("\n(Dry run — skipping interactive prompts)")
+        exclude = set()
+        # Collect all dupes as excluded for dry-run preview
+        for dupe_groups in group_dupes.values():
+            for group in dupe_groups:
+                for dupe in group[1:]:
+                    exclude.add(dupe)
+    else:
+        # Step 4: Prompt user to name groups
+        clusters = prompt_for_cluster_names(clusters)
+
+        # Step 4b: Prompt for dates on undated clusters
+        clusters = prompt_for_cluster_dates(clusters)
+
+        # Step 5: Prompt for duplicate removal
+        exclude = set()
+        if group_dupes:
+            exclude = prompt_duplicate_removal(clusters, group_dupes)
+
+    # Step 6: Plan moves
+    print(f"\nPlanning organization with pattern: {args.pattern}")
+    moves = plan_group_moves(
+        clusters, args.destination, pattern=args.pattern, exclude=exclude
+    )
+
+    if not moves:
+        print("No files to move.")
+        return
+
+    # Step 7: Preview
+    print(preview_group_moves(moves))
+
+    if args.dry_run:
+        print("(Dry run — no files were changed)")
+        return
+
+    # Step 8: Execute moves
+    undo_log = args.undo_log or str(
+        Path(args.destination) / ".group_undo_log.json"
+    )
+
+    total = len(moves)
+    print(f"Moving {total} photo(s) into group folders...")
+    results = execute_group_moves(moves, undo_log_path=undo_log)
+
+    dupes_removed = len(exclude)
+    print(f"Done! {results['success']} succeeded, {results['failed']} failed.")
+    if dupes_removed:
+        print(f"{dupes_removed} duplicate(s) removed.")
+    print(f"Undo log saved to: {undo_log}")
+
+    for error in results["errors"]:
+        print(f"  Error: {error}")
+
+
+def _cmd_web(args):
+    """Handle the 'web' subcommand."""
+    from photo_organizer.web import create_app
+
+    app = create_app()
+    url = f"http://127.0.0.1:{args.port}"
+    print(f"Starting Photo Organizer web UI at {url}")
+
+    if not args.no_open:
+        import threading
+        import webbrowser
+        threading.Timer(1.0, webbrowser.open, args=[url]).start()
+
+    app.run(host="127.0.0.1", port=args.port, debug=False)
 
 
 if __name__ == "__main__":

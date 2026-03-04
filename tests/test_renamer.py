@@ -104,6 +104,56 @@ def test_apply_pattern_original_name(tmp_path):
     assert result == "vacation_001.jpg"
 
 
+def test_apply_pattern_date_override(tmp_path):
+    """date_override should be used instead of EXIF date."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+    override = datetime(2023, 2, 15, 10, 0, 0)
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=None), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(photo, "{date}_{seq}", 1, date_override=override)
+
+    assert result == "2023-02-15_001.jpg"
+
+
+def test_apply_pattern_date_override_beats_exif(tmp_path):
+    """date_override should take priority over EXIF date."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+    exif_date = datetime(2024, 6, 15)
+    override = datetime(2023, 2, 15)
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=exif_date), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(photo, "{date}_{seq}", 1, date_override=override)
+
+    assert result == "2023-02-15_001.jpg"
+
+
+def test_apply_pattern_string_date_override(tmp_path):
+    """String date_override should be used directly for all date placeholders."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=None), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(photo, "{date}_{seq}", 1, date_override="03-2023")
+
+    assert result == "03-2023_001.jpg"
+
+
+def test_apply_pattern_string_date_override_all_placeholders(tmp_path):
+    """String date_override should fill {year}, {month}, {day}, {datetime} too."""
+    photo = _create_photo(tmp_path, "IMG_001.jpg")
+
+    with patch("photo_organizer.renamer.get_date_taken", return_value=None), \
+         patch("photo_organizer.renamer.read_metadata", return_value={}):
+        result = _apply_pattern(
+            photo, "{year}_{month}_{day}_{datetime}_{seq}", 1,
+            date_override="March_2023",
+        )
+
+    assert result == "March_2023_March_2023_March_2023_March_2023_001.jpg"
+
+
 # --- Test plan_renames() ---
 
 def test_plan_renames_basic(tmp_path):

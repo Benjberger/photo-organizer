@@ -192,7 +192,7 @@ def undo_renames(undo_log_path):
     return results
 
 
-def _apply_pattern(filepath, pattern, seq, location=None):
+def _apply_pattern(filepath, pattern, seq, location=None, date_override=None):
     """Fill in a naming pattern with actual metadata values.
 
     Args:
@@ -200,13 +200,14 @@ def _apply_pattern(filepath, pattern, seq, location=None):
         pattern: Pattern string with {placeholders}.
         seq: Current sequence number.
         location: Optional location/group name for {location} placeholder.
+        date_override: Optional datetime to use instead of EXIF date
+                       for {date}, {datetime}, {year}, {month}, {day}.
 
     Returns:
         The new filename (with original extension preserved).
     """
     filepath = Path(filepath)
     metadata = read_metadata(filepath)
-    date = get_date_taken(filepath)
 
     # Build the replacement values
     values = {
@@ -216,18 +217,27 @@ def _apply_pattern(filepath, pattern, seq, location=None):
     }
 
     # Date-related values
-    if date:
-        values["date"] = date.strftime("%Y-%m-%d")
-        values["datetime"] = date.strftime("%Y-%m-%d_%H%M%S")
-        values["year"] = date.strftime("%Y")
-        values["month"] = date.strftime("%m")
-        values["day"] = date.strftime("%d")
+    if isinstance(date_override, str):
+        # Freeform text override — use directly for all date placeholders
+        values["date"] = date_override
+        values["datetime"] = date_override
+        values["year"] = date_override
+        values["month"] = date_override
+        values["day"] = date_override
     else:
-        values["date"] = "undated"
-        values["datetime"] = "undated"
-        values["year"] = "unknown"
-        values["month"] = "unknown"
-        values["day"] = "unknown"
+        date = date_override or get_date_taken(filepath)
+        if date:
+            values["date"] = date.strftime("%Y-%m-%d")
+            values["datetime"] = date.strftime("%Y-%m-%d_%H%M%S")
+            values["year"] = date.strftime("%Y")
+            values["month"] = date.strftime("%m")
+            values["day"] = date.strftime("%d")
+        else:
+            values["date"] = "undated"
+            values["datetime"] = "undated"
+            values["year"] = "unknown"
+            values["month"] = "unknown"
+            values["day"] = "unknown"
 
     # Camera info
     make = metadata.get("Make", "")

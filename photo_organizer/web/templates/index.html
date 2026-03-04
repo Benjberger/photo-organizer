@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Photo Organizer</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav id="sidebar">
+        <h1>Photo Organizer</h1>
+        <ul>
+            <li><a href="#metadata" data-page="metadata">Metadata</a></li>
+            <li><a href="#organize" data-page="organize">Organize</a></li>
+            <li><a href="#duplicates" data-page="duplicates">Duplicates</a></li>
+            <li><a href="#rename" data-page="rename">Rename</a></li>
+            <li><a href="#review" data-page="review">Review</a></li>
+            <li><a href="#select" data-page="select">Select</a></li>
+            <li><a href="#group" data-page="group">Group</a></li>
+        </ul>
+    </nav>
+    <main id="content">
+    </main>
+
+    <div id="browse-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="browse-title">Browse</h3>
+                <button id="browse-close" class="btn-icon">&times;</button>
+            </div>
+            <div id="browse-path" class="browse-path"></div>
+            <div id="browse-list" class="browse-list"></div>
+            <div class="modal-footer">
+                <button id="browse-select" class="btn-primary">Select</button>
+                <button id="browse-cancel" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/browse.js"></script>
+    <script src="/static/js/metadata.js"></script>
+    <script src="/static/js/organize.js"></script>
+    <script src="/static/js/duplicates.js"></script>
+    <script src="/static/js/rename.js"></script>
+    <script src="/static/js/review.js"></script>
+    <script src="/static/js/select.js"></script>
+    <script src="/static/js/group.js"></script>
+</body>
+</html>
